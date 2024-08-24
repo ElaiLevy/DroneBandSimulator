@@ -45,13 +45,16 @@ Simulator::Simulator(std::string ORBSLAMConfigFile, std::string model_path, bool
     this->orbExtractor = std::make_shared<ORB_SLAM2::ORBextractor>(numberOfFeatures, fScaleFactor, nLevels, fIniThFAST,
                                                              fMinThFAST);
 
-    // Save parameters for slam initilization
+    // Save parameters for slam initialization
     this->vocPath = vocPath;
     this->ORBSLAMConfigFile = ORBSLAMConfigFile;
     this->loadMap = loadMap;
     this->mapLoadPath = mapLoadPath;
 
     this->points = std::vector<std::pair<cv::Point3d, std::pair<float, Eigen::Vector3d>>>();
+
+    // Initialize RoomExit with the points
+    roomExit = std::make_shared<RoomExit>(std::vector<Eigen::Vector3d>{});
 }
 
 void Simulator::command(const std::string &command, int intervalUsleep, double fps, int totalCommandTimeInSeconds) {
@@ -60,13 +63,12 @@ void Simulator::command(const std::string &command, int intervalUsleep, double f
     double value;
     iss >> c;
     if (commandMap.count(c) && commandMap[c]) {
-
         std::string stringValue;
         iss >> stringValue;
         value = std::stod(stringValue);
         applyCommand(c, value, intervalUsleep, fps, totalCommandTimeInSeconds);
     } else {
-        std::cout << "the command " << c << " is not supported and will be skipped" << std::endl;
+        std::cout << "The command " << c << " is not supported and will be skipped" << std::endl;
     }
 }
 
@@ -82,6 +84,17 @@ bool Simulator::feedSLAM(cv::Mat &img) {
     bool currentIsInitalized = !(state == SLAM->GetTracker()->NOT_INITIALIZED ||
                                  state == SLAM->GetTracker()->NO_IMAGES_YET);
     isInitalized = currentIsInitalized;
+
+    // Update RoomExit with the current map points
+    std::vector<Eigen::Vector3d> mapPoints;
+    for (auto &p : SLAM->GetMap()->GetAllMapPoints()) {
+        if (p != nullptr && !p->isBad()) {
+            auto point = ORB_SLAM2::Converter::toVector3d(p->GetWorldPos());
+            mapPoints.push_back(point);
+        }
+    }
+    roomExit->setPoints(mapPoints); // Update the points in RoomExit
+
     return state == SLAM->GetTracker()->OK;
 }
 
@@ -98,20 +111,26 @@ void Simulator::SLAMThread() {
             }
         }
     }
-
 }
 
 void Simulator::simulatorRunThread() {
     std::string windowName = "Model";
-    pangolin::CreateWindowAndBind(windowName);
+    pangolin::CreateWindowAndBind(windowName, viewportDesiredSize(0) * 2, viewportDesiredSize(1)); // Double the window width
 
-    // we manually need to restore the properties of the context
+    // We manually need to restore the properties of the context
     glEnable(GL_DEPTH_TEST);
     this->s_cam = pangolin::OpenGlRenderState(
             pangolin::ProjectionMatrix(viewportDesiredSize(0), viewportDesiredSize(1), K(0, 0), K(1, 1), K(0, 2),
                                        K(1, 2), 0.1, 20),
             pangolin::ModelViewLookAt(this->startingPoint.x(), this->startingPoint.y(), this->startingPoint.z(), 0, 0, 0, 0.0, -1.0,
-                                      pangolin::AxisY)); // the first 3 value are meaningless because we change them later
+                                      pangolin::AxisY)); // The first 3 values are meaningless because we change them later
+
+    // Initialize the second camera with an offset for the second drone
+    this->s_cam2 = pangolin::OpenGlRenderState(
+            pangolin::ProjectionMatrix(viewportDesiredSize(0), viewportDesiredSize(1), K(0, 0), K(1, 1), K(0, 2),
+                                       K(1, 2), 0.1, 20),
+            pangolin::ModelViewLookAt(this->startingPoint.x(), this->startingPoint.y(), this->startingPoint.z() + 0.3, 0, 0, 0, 0.0, -1.0,
+                                      pangolin::AxisY)); // Offset by 0.3m in the z direction
 
     bool show_bounds = false;
     bool show_axis = false;
@@ -128,14 +147,14 @@ void Simulator::simulatorRunThread() {
     pangolin::RegisterKeyPressCallback('x', [&]() { show_x0 = !show_x0; });
     pangolin::RegisterKeyPressCallback('y', [&]() { show_y0 = !show_y0; });
     pangolin::RegisterKeyPressCallback('z', [&]() { show_z0 = !show_z0; });
-    pangolin::RegisterKeyPressCallback('w', [&]() { applyForwardToModelCam(this->s_cam, movementFactor); });
-    pangolin::RegisterKeyPressCallback('a', [&]() { applyRightToModelCam(this->s_cam, movementFactor); });
-    pangolin::RegisterKeyPressCallback('s', [&]() { applyForwardToModelCam(this->s_cam, -movementFactor); });
-    pangolin::RegisterKeyPressCallback('d', [&]() { applyRightToModelCam(this->s_cam, -movementFactor); });
-    pangolin::RegisterKeyPressCallback('e', [&]() { applyYawRotationToModelCam(this->s_cam, 1); });
-    pangolin::RegisterKeyPressCallback('q', [&]() { applyYawRotationToModelCam(this->s_cam, -1); });
-    pangolin::RegisterKeyPressCallback('r', [&]() { applyUpModelCam(this->s_cam, -movementFactor); }); // ORBSLAM y axis is reversed
-    pangolin::RegisterKeyPressCallback('f', [&]() { applyUpModelCam(this->s_cam, movementFactor); });
+    pangolin::RegisterKeyPressCallback('w', [&]() { applyForwardToModelCam(this->s_cam, movementFactor); applyForwardToModelCam(this->s_cam2, movementFactor); });
+    pangolin::RegisterKeyPressCallback('a', [&]() { applyRightToModelCam(this->s_cam, movementFactor); applyRightToModelCam(this->s_cam2, movementFactor); });
+    pangolin::RegisterKeyPressCallback('s', [&]() { applyForwardToModelCam(this->s_cam, -movementFactor); applyForwardToModelCam(this->s_cam2, -movementFactor); });
+    pangolin::RegisterKeyPressCallback('d', [&]() { applyRightToModelCam(this->s_cam, -movementFactor); applyRightToModelCam(this->s_cam2, -movementFactor); });
+    pangolin::RegisterKeyPressCallback('e', [&]() { applyYawRotationToModelCam(this->s_cam, 1); applyYawRotationToModelCam(this->s_cam2, 1); });
+    pangolin::RegisterKeyPressCallback('q', [&]() { applyYawRotationToModelCam(this->s_cam, -1); applyYawRotationToModelCam(this->s_cam2, -1); });
+    pangolin::RegisterKeyPressCallback('r', [&]() { applyUpModelCam(this->s_cam, -movementFactor); applyUpModelCam(this->s_cam2, -movementFactor); }); // ORBSLAM y axis is reversed
+    pangolin::RegisterKeyPressCallback('f', [&]() { applyUpModelCam(this->s_cam, movementFactor); applyUpModelCam(this->s_cam2, movementFactor); });
     pangolin::RegisterKeyPressCallback('1', [&]() { slower(); });
     pangolin::RegisterKeyPressCallback('2', [&]() { faster(); });
     auto LoadProgram = [&]() {
@@ -145,9 +164,13 @@ void Simulator::simulatorRunThread() {
     };
     LoadProgram();
     pangolin::Handler3D handler(this->s_cam);
+    pangolin::Handler3D handler2(this->s_cam2); // Handler for the second camera
     pangolin::View &d_cam = pangolin::Display("simulator_d_cam")
-            .SetBounds(0.0, 1.0, 0.0, 1.0, ((float) -viewportDesiredSize[0] / (float) viewportDesiredSize[1]))
+            .SetBounds(0.0, 1.0, 0.0, 0.5, -640.0f / 480.0f)
             .SetHandler(&handler);
+    pangolin::View &d_cam2 = pangolin::Display("simulator_d_cam2")
+            .SetBounds(0.0, 1.0, 0.5, 1.0, -640.0f / 480.0f)
+            .SetHandler(&handler2);
     const pangolin::Geometry modelGeometry = pangolin::LoadGeometry(modelPath);
     if (alignModelToTexture) {
         alignModelViewPointToSurface(modelGeometry, modelTextureNameToAlignTo);
@@ -161,11 +184,15 @@ void Simulator::simulatorRunThread() {
     pangolin::VideoPixelFormat fmt = pangolin::VideoFormatFromString("RGBA32");
     int width = d_cam.v.w;
     int height = d_cam.v.h;
+    int width2 = d_cam2.v.w;
+    int height2 = d_cam2.v.h;
     std::thread slamThread;
     slamThread = std::move(std::thread(&Simulator::SLAMThread, this));
     while (!pangolin::ShouldQuit() && !stopFlag) {
         ready = true;
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // Render first camera view
         if (d_cam.IsShown()) {
             d_cam.Activate(this->s_cam);
             if (cull_backfaces) {
@@ -189,35 +216,64 @@ void Simulator::simulatorRunThread() {
             glDisable(GL_CULL_FACE);
 
             Auxiliary::drawPoints(this->points);
-
-            pangolin::FinishFrame();
-
-
-            if (saveMapSignal) {
-                saveMapSignal = false;
-                char time_buf[21];
-                time_t now_t;
-                std::time(&now_t);
-                std::strftime(time_buf, 21, "%Y-%m-%d_%H:%S:%MZ", gmtime(&now_t));
-                std::string currentTime(time_buf);
-                saveMap(currentTime);
-                SLAM->SaveMap(simulatorOutputDir + "/simulatorCloudPoint" + currentTime + ".bin");
-                std::cout << "new map saved to " << simulatorOutputDir + "/simulatorCloudPoint" + currentTime + ".bin"
-                          << std::endl;
-            }
-
         } else {
             this->s_cam.Apply();
             pangolin::FinishFrame();
-
         }
 
+        // Render second camera view
+        if (d_cam2.IsShown()) {
+            d_cam2.Activate(this->s_cam2);
+            if (cull_backfaces) {
+                glEnable(GL_CULL_FACE);
+                glCullFace(GL_BACK);
+            }
+
+            program.Bind();
+            program.SetUniform("KT_cw", this->s_cam2.GetProjectionMatrix() * this->s_cam2.GetModelViewMatrix());
+            pangolin::GlDraw(program, geomToRender, nullptr);
+            program.Unbind();
+            std::vector<unsigned char> buffer2(4 * width2 * height2);
+            glReadPixels(0, 0, width2, height2, GL_RGBA, GL_UNSIGNED_BYTE, buffer2.data());
+            cv::Mat imgBuffer2 = cv::Mat(height2, width2, CV_8UC4, buffer2.data());
+            imgLock.lock();
+            cv::cvtColor(imgBuffer2, currentImg, cv::COLOR_RGBA2GRAY);
+            cv::flip(currentImg, currentImg, 0);
+            imgLock.unlock();
+            this->s_cam2.Apply();
+
+            glDisable(GL_CULL_FACE);
+
+            Auxiliary::drawPoints(this->points); // Reuse the points rendering function
+        } else {
+            this->s_cam2.Apply();
+            pangolin::FinishFrame();
+        }
+
+        pangolin::FinishFrame();
+
+        if (saveMapSignal) {
+            saveMapSignal = false;
+            char time_buf[21];
+            time_t now_t;
+            std::time(&now_t);
+            std::strftime(time_buf, 21, "%Y-%m-%d_%H:%S:%MZ", gmtime(&now_t));
+            std::string currentTime(time_buf);
+            saveMap(currentTime);
+            SLAM->SaveMap(simulatorOutputDir + "/simulatorCloudPoint" + currentTime + ".bin");
+            std::cout << "New map saved to " << simulatorOutputDir + "/simulatorCloudPoint" + currentTime + ".bin"
+                      << std::endl;
+        }
+
+        // Example navigation towards the exit points
+        if (isInitalized && !stopFlag) {
+            navigateToExit();
+        }
     }
     if (isSaveMap) {
-
         saveMap("final");
         SLAM->SaveMap(simulatorOutputDir + "/finalSimulatorCloudPoint.bin");
-        std::cout << "new map saved to " << simulatorOutputDir + "/finalSimulatorCloudPoint.bin" << std::endl;
+        std::cout << "New map saved to " << simulatorOutputDir + "/finalSimulatorCloudPoint.bin" << std::endl;
     }
     SLAM->Shutdown();
 }
@@ -329,6 +385,7 @@ void Simulator::intervalOverCommand(
     while (intervalIndex <= fps * totalCommandTimeInSeconds) {
         usleep(intervalUsleep);
         func(this->s_cam, intervalValue);
+        func(this->s_cam2, intervalValue); // Apply to second camera
         intervalIndex += 1;
     }
 }
@@ -468,4 +525,31 @@ void Simulator::drawPoint(cv::Point3d point, float size, Eigen::Vector3d color)
 void Simulator::cleanPoints()
 {
     this->points = std::vector<std::pair<cv::Point3d, std::pair<float, Eigen::Vector3d>>>();
+}
+
+void Simulator::navigateToExit() {
+    if (roomExit->calculateNearestExit()) {
+        Eigen::Vector3d exitPoint = roomExit->getExitPoint();
+        commandDroneTowardsPoint(s_cam, exitPoint, movementFactor);
+        commandDroneTowardsPoint(s_cam2, exitPoint, movementFactor); // Move the second drone towards the exit
+    }
+}
+
+void Simulator::commandDroneTowardsPoint(pangolin::OpenGlRenderState &cam, const Eigen::Vector3d &point, double movementFactor) {
+    Eigen::Matrix4d camMatrix = pangolin::ToEigen<double>(cam.GetModelViewMatrix());
+    Eigen::Vector3d position(camMatrix(0, 3), camMatrix(1, 3), camMatrix(2, 3));
+    Eigen::Vector3d direction = (point - position).normalized();
+
+    camMatrix(0, 3) += direction(0) * movementFactor;
+    camMatrix(1, 3) += direction(1) * movementFactor;
+    camMatrix(2, 3) += direction(2) * movementFactor;
+
+    pangolin::OpenGlMatrix newModelView;
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            newModelView.m[j * 4 + i] = camMatrix(i, j);
+        }
+    }
+
+    cam.SetModelViewMatrix(newModelView);
 }
