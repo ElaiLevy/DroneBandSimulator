@@ -1,10 +1,10 @@
 # Drone Band Simulator
 
 ## 3D model of the lab using NeRF studio
-# I. Installation:
+### I. Installation:
 - You will need to create an environment to run and install nerfstudio.
 - Please follow the guid on this link to install nerfstudio that fits to your computer: https://docs.nerf.studio/quickstart/installation.html.
-# II. Use nerfstudio on your own data:
+### II. Use nerfstudio on your own data:
 1. Take photos of your 3D modeling object, in our case the drone lab. Make sure that you take enough photos to model the object properly.
 2. Process the image using the following commad:
    ns-process-data images --data <path_to_your_images_directory> --output-dir <path_to_your_output_directory>
