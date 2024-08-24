@@ -1,11 +1,31 @@
-# Simulator Mapping
+# Drone Band Simulator
+
+## 3D model of the lab using NeRF studio
+# I. Installation:
+- You will need to create an environment to run and install nerfstudio.
+- Please follow the guid on this link to install nerfstudio that fits to your computer: https://docs.nerf.studio/quickstart/installation.html.
+# II. Use nerfstudio on your own data:
+1. Take photos of your 3D modeling object, in our case the drone lab. Make sure that you take enough photos to model the object properly.
+2. Process the image using the following commad:
+   ns-process-data images --data <path_to_your_images_directory> --output-dir <path_to_your_output_directory>
+   This command uses colmap to process the images, if there isn't enough images or the quality of the images is bad this process will fail.
+3. Train your nerf model using the following command:
+   ns-train nerfacto --pipeline.model.predict-normals True --data <pr]ath_to_your_processed_data>
+4. Export the 3D model using the following command:
+   ns-export poisson --load-config <path_to_the_output_of_the_training_should_be_in_this_format outputs/data/nerfacto/2024-04-27_133234/config.yml> --output-dir <path_to_your_output_directory>
+5. Now you can display the 3D model using any mesh data program such as MeshLab - https://www.meshlab.net/#download.
+
+## Lab Simulator
+
+## Credits:
+This project inculdes drones simulator that based on the lab simulator which created by Liam Vanunu.
+You can find more information on the simulator in the following link : https://github.com/rbdlabhaifa/simulatorMapping.
 
 ## Requirements:
 - Need to Edite this part for our project!!!
 - Ubuntu 22.04
 - At least 4 cores(If you're working from virtual machine please allocate at least 4 cores to the VM)
 - Prefered: 6 cores
-
 ## Students Guide
 
 For comprehensive guide about the simulator: 
