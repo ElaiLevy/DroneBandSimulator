@@ -1,0 +1,60 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+Vocabulary/*.txt
+
+**/**/.idea/
+
+cmake-build-debug/
+
+simulatorDataSets/
+
+**/**/build/
+slamMaps/
+.vs
+.vscode
+vcpkg_installed/
+out/
+videos/
+**/bin**
+**/Debug**
+CMakeSettings.json
+leaves_to_weights.pkl
+Thirdparty/slam/Vocabulary/ORBvoc.txt
+Thirdparty/eigen/
+Thirdparty/json/
+Thirdparty/matplotlib-cpp/
+Thirdparty/spdlog/
+Thirdparty/ctello/
+Thirdparty/opencv_contrib/
+Thirdparty/opencv/
