@@ -58,13 +58,13 @@ Open generalSettings.json and change:
 
 ## II. Usage:
 ### 1. Run simulator:
-- run `./examples/runSimulator` from the `build` folder in order to use the simulator within the model
+- run `./exe/runSimulator` from the `build` folder in order to use the simulator within the model
 pay attention to the prints:
 you will need to press tab from the model viewer in order to start running the slam through the simulator with pre defined moves
 
 ### 2. Create orb slam map from webcam/drone:
-- run `./examples/mapping` from the `build` folder
+- run `./exe/mapping` from the `build` folder
 
 ### 3. create Orb Slam map from video:
-- run `./examples/offline_orb_slam` from the `build` folder
+- run `./exe/offline_orb_slam` from the `build` folder
 
